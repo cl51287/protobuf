@@ -903,18 +903,38 @@ static void classname_no_prefix(const char *fullname, const char *package_name,
 
 void internal_add_generated_file(const char *data, PHP_PROTO_SIZE data_len,
                                  InternalDescriptorPool *pool TSRMLS_DC) {
-  upb_filedef **files;
+  internal_add_generated_file_and_cache("", data, data_len, pool TSRMLS_DC);
+}
+
+void internal_add_generated_file_and_cache(const char *proto_name, const char *data, PHP_PROTO_SIZE data_len,
+                                 InternalDescriptorPool *pool TSRMLS_DC) {
+  upb_filedef **files = NULL;
   size_t i;
 
-  CHECK_UPB(files = upb_loaddescriptor(data, data_len, &pool, &status),
+  if (strlen(proto_name) > 0) {
+    zval* files_php_ptr = get_file_obj(proto_name);
+    if (files_php_ptr != NULL) {
+      files = Z_PTR_P(files_php_ptr);
+    }
+    files_php_ptr = NULL;
+  }
+  
+  if (!files || !files[0]) {
+    CHECK_UPB(files = upb_loaddescriptor(data, data_len, &pool, &status),
             "Parse binary descriptors to internal descriptors failed");
+    if (strlen(proto_name) > 0) {
+      zval files_php;
+      ZVAL_PTR(&files_php, files);
+      add_file_obj(proto_name, &files_php);
+    }
 
-  // This method is called only once in each file.
-  assert(files[0] != NULL);
-  assert(files[1] == NULL);
+    // This method is called only once in each file.
+    assert(files[0] != NULL);
+    assert(files[1] == NULL);
 
-  CHECK_UPB(upb_symtab_addfile(pool->symtab, files[0], &status),
+    CHECK_UPB(upb_symtab_addfile(pool->symtab, files[0], &status),
             "Unable to add file to DescriptorPool");
+  }
 
   // For each enum/message, we need its PHP class, upb descriptor and its PHP
   // wrapper. These information are needed later for encoding, decoding and type
@@ -981,24 +1001,27 @@ void internal_add_generated_file(const char *data, PHP_PROTO_SIZE data_len,
       build_class_from_descriptor(desc_php TSRMLS_CC);
     }
   }
-
-  upb_filedef_unref(files[0], &pool);
-  upb_gfree(files);
 }
 
 PHP_METHOD(InternalDescriptorPool, internalAddGeneratedFile) {
   char *data = NULL;
   PHP_PROTO_SIZE data_len;
   upb_filedef **files;
+  char *proto_file_name = NULL;
+  size_t proto_file_name_len = 0;
   size_t i;
 
-  if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "s", &data, &data_len) ==
+  if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "s|s", &data, &data_len, &proto_file_name, &proto_file_name_len) ==
       FAILURE) {
     return;
   }
 
   InternalDescriptorPool *pool = UNBOX(InternalDescriptorPool, getThis());
-  internal_add_generated_file(data, data_len, pool TSRMLS_CC);
+  if (proto_file_name_len > 0) {
+    internal_add_generated_file_and_cache(proto_file_name, data, data_len, pool TSRMLS_CC);
+  } else {
+    internal_add_generated_file_and_cache("", data, data_len, pool TSRMLS_CC);
+  }
 }
 
 PHP_METHOD(DescriptorPool, getDescriptorByClassName) {

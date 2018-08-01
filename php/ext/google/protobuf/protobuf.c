@@ -50,6 +50,7 @@ static HashTable* ce_to_php_obj_map;
 // wrapper Descriptor/EnumDescriptor instances.
 static HashTable* proto_to_php_obj_map;
 static HashTable* reserved_names;
+static HashTable* proto_to_files_map;
 
 // -----------------------------------------------------------------------------
 // Global maps.
@@ -142,6 +143,14 @@ void add_proto_obj(const char* proto, PHP_PROTO_HASHTABLE_VALUE value) {
 PHP_PROTO_HASHTABLE_VALUE get_proto_obj(const char* proto) {
   return (PHP_PROTO_HASHTABLE_VALUE)get_from_strtable(proto_to_php_obj_map,
                                                       proto, strlen(proto));
+}
+
+void add_file_obj(const char* proto_name, zval* value) {
+  zend_hash_str_update(proto_to_files_map, proto_name, strlen(proto_name) + 1, value);
+}
+
+zval* get_file_obj(const char* proto_name) {
+  return zend_hash_str_find(proto_to_files_map, proto_name, strlen(proto_name) + 1);
 }
 
 // -----------------------------------------------------------------------------
@@ -242,6 +251,15 @@ static void php_proto_hashtable_descriptor_release(zval* value) {
   efree(ptr);
 }
 #endif
+static void php_proto_file_hashtable_descriptor_release(zval* value) {
+  void* ptr = Z_PTR_P(value);
+  zend_object* object = *(zend_object**)ptr;
+  GC_DELREF(object);
+  if(GC_REFCOUNT(object) == 0) {
+    zend_objects_store_del(object);
+  }
+  upb_gfree(ptr);
+}
 
 static PHP_RINIT_FUNCTION(protobuf) {
   int i = 0;
@@ -261,10 +279,6 @@ static PHP_RINIT_FUNCTION(protobuf) {
     php_proto_zend_hash_update(reserved_names, kReservedNames[i],
                                strlen(kReservedNames[i]));
   }
-
-  generated_pool = NULL;
-  generated_pool_php = NULL;
-  internal_generated_pool_php = NULL;
 
   is_inited_file_any = false;
   is_inited_file_api = false;
@@ -293,27 +307,6 @@ static PHP_RSHUTDOWN_FUNCTION(protobuf) {
   zend_hash_destroy(reserved_names);
   FREE_HASHTABLE(reserved_names);
 
-#if PHP_MAJOR_VERSION < 7
-  if (generated_pool_php != NULL) {
-    zval_dtor(generated_pool_php);
-    FREE_ZVAL(generated_pool_php);
-  }
-  if (internal_generated_pool_php != NULL) {
-    zval_dtor(internal_generated_pool_php);
-    FREE_ZVAL(internal_generated_pool_php);
-  }
-#else
-  if (generated_pool_php != NULL) {
-    zval tmp;
-    ZVAL_OBJ(&tmp, generated_pool_php);
-    zval_dtor(&tmp);
-  }
-  if (internal_generated_pool_php != NULL) {
-    zval tmp;
-    ZVAL_OBJ(&tmp, internal_generated_pool_php);
-    zval_dtor(&tmp);
-  }
-#endif
 
   is_inited_file_any = true;
   is_inited_file_api = true;
@@ -387,10 +380,41 @@ static PHP_MINIT_FUNCTION(protobuf) {
   u_int64_value_init(TSRMLS_C);
   value_init(TSRMLS_C);
 
+  proto_to_files_map = (HashTable *) pemalloc(sizeof(HashTable), 1);
+  zend_hash_init(proto_to_files_map, 16, NULL, php_proto_file_hashtable_descriptor_release, 1);
+
+  generated_pool = NULL;
+  generated_pool_php = NULL;
+  internal_generated_pool_php = NULL;
+
   return 0;
 }
 
 static PHP_MSHUTDOWN_FUNCTION(protobuf) {
+#if PHP_MAJOR_VERSION < 7
+  if (generated_pool_php != NULL) {
+    zval_dtor(generated_pool_php);
+    FREE_ZVAL(generated_pool_php);
+  }
+  if (internal_generated_pool_php != NULL) {
+    zval_dtor(internal_generated_pool_php);
+    FREE_ZVAL(internal_generated_pool_php);
+  }
+#else
+  if (generated_pool_php != NULL) {
+    zval tmp;
+    ZVAL_OBJ(&tmp, generated_pool_php);
+    zval_dtor(&tmp);
+  }
+  if (internal_generated_pool_php != NULL) {
+    zval tmp;
+    ZVAL_OBJ(&tmp, internal_generated_pool_php);
+    zval_dtor(&tmp);
+  }
+#endif
+
+  pefree(proto_to_files_map, 1);;
+
   PEFREE(message_handlers);
   PEFREE(repeated_field_handlers);
   PEFREE(repeated_field_iter_handlers);

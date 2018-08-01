@@ -37,7 +37,7 @@
 #include "upb.h"
 
 #define PHP_PROTOBUF_EXTNAME "protobuf"
-#define PHP_PROTOBUF_VERSION "3.6.1"
+#define PHP_PROTOBUF_VERSION "3.5.2"
 
 #define MAX_LENGTH_OF_INT64 20
 #define SIZEOF_INT64 8
@@ -735,6 +735,10 @@ bool class_added(const void* ce);
 // wrapper Descriptor/EnumDescriptor instances.
 void add_proto_obj(const char* proto, PHP_PROTO_HASHTABLE_VALUE value);
 PHP_PROTO_HASHTABLE_VALUE get_proto_obj(const char* proto);
+
+// file action
+void add_file_obj(const char* proto_name, zval* value);
+zval* get_file_obj(const char* proto);
 
 extern zend_class_entry* map_field_type;
 extern zend_class_entry* repeated_field_type;
