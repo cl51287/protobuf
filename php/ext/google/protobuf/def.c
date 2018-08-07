@@ -653,7 +653,7 @@ void init_generated_pool_once(TSRMLS_D) {
 
 static void internal_descriptor_pool_init_c_instance(
     InternalDescriptorPool *pool TSRMLS_DC) {
-  pool->symtab = upb_symtab_new();
+  pool->symtab = get_pool_symtab();
 
   ALLOC_HASHTABLE(pool->pending_list);
   zend_hash_init(pool->pending_list, 1, NULL, ZVAL_PTR_DTOR, 0);
@@ -661,8 +661,6 @@ static void internal_descriptor_pool_init_c_instance(
 
 static void internal_descriptor_pool_free_c(
     InternalDescriptorPool *pool TSRMLS_DC) {
-  upb_symtab_free(pool->symtab);
-
   zend_hash_destroy(pool->pending_list);
   FREE_HASHTABLE(pool->pending_list);
 }

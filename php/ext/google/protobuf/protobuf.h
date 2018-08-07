@@ -740,6 +740,8 @@ PHP_PROTO_HASHTABLE_VALUE get_proto_obj(const char* proto);
 void add_file_obj(const char* proto_name, zval* value);
 zval* get_file_obj(const char* proto);
 
+upb_symtab* get_pool_symtab();
+
 extern zend_class_entry* map_field_type;
 extern zend_class_entry* repeated_field_type;
 
